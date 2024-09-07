@@ -1,0 +1,1319 @@
+---
+title: "Zero_inflatted_model"
+output: html_document
+date: "2023-03-06"
+---
+
+#download packages
+```{r message = FALSE}
+require(ggplot2)
+library(tidyverse)
+library(dplyr)
+require(pscl)
+require(car)
+require(MASS)
+require(boot)
+library(lattice) # alternatively can use package ZIM for zero-inflated models
+library(lmtest)
+library(MASS)
+library(tidyverse)
+library(easystats)
+library(ggeffects)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(easystats)
+library(cowplot)
+```
+
+```{r}
+p_a <- read_csv("data_final_DOH.csv")
+p_a
+```
+
+```{r}
+table(p_a$Positive_Number)
+table(p_a$Negative_Number)
+table(p_a$Collective_Number)
+table(p_a$Individual_Number)
+```
+
+
+```{r message = FALSE}
+p <- read_csv("DOH.csv")
+```
+
+#Change variable names 
+```{r}
+p1 <- 
+  p %>% 
+  rename(State_recode = `State_ recode`, 
+        White_percent = `White_\bpercent`, 
+        Risk_Factor ='RiskFactor_2_CTA', 
+        Social_Disparities = 'SocialDisparities_3_CTA', 
+        Debunk_MI = 'Debunk_4_CTA',
+        Uncertainty_Reduction = 'UncertaintyReduction_5_CTA',  
+        Testing = 'Testing_6_CTA', 
+        Vaccine = 'Vaccine_7_CTA', 
+        Pre_Action = 'Action_13_CTA', 
+        Positive_eff = 'Positive_14a_Number', 
+        Negative_eff = 'Negative_14b_Number', 
+        Individual_eff = 'Individual_14c_Number', 
+        Collective_eff = 'Collective_14d_Number', 
+        Prosperity_ranking = 'ProspertiyRanking', 
+        Minority_percent = 'minority_percent'
+  ) 
+```
+
+#Transform to bi-nominal only 1 and 0 for various variables 
+```{r}
+p3 <- 
+  p1 %>% 
+mutate(Risk_Factor = ifelse(Risk_Factor %in% c('88', '888'), 0, 1)) %>% 
+mutate(Social_Disparities = ifelse(Social_Disparities %in% c('88', '888'), 0, 1)) %>% 
+mutate(Debunk_MI = ifelse(Debunk_MI %in% c('88', '888'), 0, 1)) %>% 
+mutate(Uncertainty_Reduction = ifelse(Uncertainty_Reduction %in% c('88', '888'), 0, 1))
+p3
+```
+
+```{r}
+glimpse(p3)
+```
+
+```{r}
+table(p3$Risk_Factor)
+table(p3$Social_Disparities)
+table(p3$Debunk_MI)
+table(p3$Uncertainty_Reduction)
+```
+
+```{r}
+table(p3$Positive_eff)
+table(p3$Negative_eff)
+table(p3$Collective_eff)
+table(p3$Individual_eff)
+
+```
+
+
+```{r}
+# Check the column names in p3
+colnames(p3)
+
+# Check the data types in p3 for relevant columns
+str(p3[c("Risk_Factor", "Social_Disparities", "Debunk_MI", "Uncertainty_Reduction")])
+
+# Modify the code to select the columns
+p2 <- p3 %>%
+  mutate(
+    Risk_Factor = as.factor(Risk_Factor),
+    Social_Disparities = as.factor(Social_Disparities),
+    Debunk_MI = as.factor(Debunk_MI),
+    Uncertainty_Reduction = as.factor(Uncertainty_Reduction)
+  )
+p2
+```
+
+```{r}
+# write a csv file of the p2
+write.csv(p2, file = "p2.csv", row.names = FALSE)
+```
+
+
+
+===== NEW==== 
+
+```{r}
+glimpse(p3) 
+```
+
+```{r}
+colnames(p2)
+```
+
+```{r}
+table(p3$Pre_Action)
+```
+
+```{r}
+na_check_Risk_Factor <- any(is.na(p2$Risk_Factor))
+na_check_Risk_Factor
+na_check_Social_Disparities <- any(is.na(p2$Social_Disparities))
+na_check_Social_Disparities 
+na_check_Debunk_MI <- any(is.na(p2$Debunk_MI))
+na_check_Debunk_MI
+na_check_Uncertainty_Reduction <- any(is.na(p2$Uncertainty_Reduction))
+na_check_Uncertainty_Reduction 
+```
+
+
+
+========
+#RQ1: To what extent do the state health departments communicate about risks (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) related to COVID-19 on their Facebook accounts between January and December 2020?
+```{r}
+table(p2$Risk_Factor)
+table(p2$Social_Disparities)
+table(p2$Debunk_MI )
+table(p2$Uncertainty_Reduction)
+```
+
+
+
+
+#RQ2:To what extent do the state health departments communicate outcome expectancies (2a)? What are the differences between the use of different types of expectancies (positive or negative and individual versus collective) on state health departments’  Facebook accounts between January and December 2020 (2b)?
+```{r}
+# Assuming you have two vectors: p2$Positive_eff and p2$Negative_eff
+# Perform a two-sample t-test
+result_t_test1 <- t.test(p2$Positive_eff, p2$Negative_eff)
+
+# Print the results
+print(result_t_test1)
+
+```
+#parameters
+```{r}
+model_parameters(result_t_test1)
+```
+# z-test "Collective_eff - Individual_eff" 
+```{r}
+result_t_test2 <- t.test(p2$Collective_eff, p2$Individual_eff)
+result_t_test2
+```
+#parameters
+```{r}
+model_parameters(result_t_test2)
+```
+
+
+
+#RQ3:To what extent do state health departments incorporate a set of risk persuasion techniques (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) in their call-to-action regarding COVID-19 between January and December 2020?
+
+```{r}
+df <- p3 %>%
+  mutate(
+    Pre_Action = ifelse(Pre_Action == 0 | Pre_Action == 88, 0, 1), 
+    New_Risk = ifelse(Risk_Factor + Social_Disparities + Debunk_MI + Uncertainty_Reduction == 0, 0, 1), 
+    New_Eff = ifelse(Positive_eff  + Negative_eff + Individual_eff + Collective_eff == 0, 0, 1)
+  ) %>%
+  filter(Pre_Action == 1)
+df
+```
+
+
+```{r}
+glimpse(df)
+table(df$Pre_Action)
+table(df$New_Risk)
+table(df$New_Eff)
+```
+
+
+
+```{r}
+# Define the APA-style theme
+theme_apa <- function() {
+  theme_minimal() +
+    theme(
+      text = element_text(family = "Times New Roman", size = 10),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.text = element_text(size = 10),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      panel.background = element_blank(),
+      legend.position = "right",
+      legend.text = element_text(size = 12), 
+      axis.line = element_line(color = "black")
+    )
+}
+```
+
+
+Run Chi-Square for New_Risk
+
+```{r}
+# Create a contingency table
+contingency_New_Risk <- table(df$New_Risk)
+# Perform the chi-square test
+chi_square_New_Risk <- chisq.test(contingency_New_Risk)
+# Print the results
+chi_square_New_Risk
+```
+```{r}
+model_parameters(chi_square_New_Risk)
+```
+
+```{r}
+# Create a data frame with the Chi-squared statistic and p-value
+results <- data.frame(Test = "chi_square_New_Risk", Chi2 = chi_square_New_Risk$statistic, p = chi_square_New_Risk$p.value)
+
+# Create a horizontal bar chart-like visualization
+library(ggplot2)
+ggplot(results, aes(x = Test, y = Chi2, fill = p < 0.001)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  labs(title = "Chi-squared test for given probabilities",
+       y = "Chi-squared statistic") +
+  scale_fill_manual(values = c("TRUE" = "purple", "FALSE" = "blue")) +
+  coord_flip() +
+  theme_apa()
+```
+
+============ 
+
+#RQ4: To what extent do state-level poverty, percentage of minority populations and government trifecta predict  state health departments’ risk persuasion techniques (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) (4a), outcome expectancies (4b) and call-to-action (4c) on state health departments’ Facebook accounts between January and December 2020?
+
+```{r}
+df1 <- p3 %>% 
+   mutate(
+    Pre_Action = ifelse(Pre_Action == 0 | Pre_Action == 88, 0, 1), 
+    New_Risk = ifelse(Risk_Factor + Social_Disparities + Debunk_MI + Uncertainty_Reduction == 0, 0, 1), 
+    New_Eff = ifelse(Positive_eff  + Negative_eff + Individual_eff + Collective_eff == 0, 0, 1)
+  ) 
+df1
+```
+
+
+
+```{r}
+df1 
+glimpse(df1)
+```
+
+```{r}
+table(df1$Pre_Action)
+table(df1$New_Risk)
+table(df1$New_Eff)
+```
+
+```{r}
+df2 <- df1 %>% 
+   #mutate_at(vars(Pre_Action, New_Risk, New_Eff), ~ifelse(. == 0, 0, 1)) %>  
+   mutate(Trifecta = as.factor(Trifecta))
+df2  
+```
+
+```{r}
+glimpse(df2)
+table(df2$Pre_Action)
+table(df2$New_Risk)
+table(df2$New_Eff)
+```
+
+#CTA
+```{r}
+library(lmtest)
+model1 <- glm(Pre_Action ~ Trifecta + Minority_percent + Poverty_percent,
+              family = binomial,
+              data = df2)
+summary(model1)
+```
+
+```{r}
+model_parameters(model1, exponentiate = TRUE)
+```
+
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(M2b1_a, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted POE by GT",
+       x = "GT",
+       y = "POE") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model1, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Call-to-action by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Call-to-action") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model1, "Minority_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted CTA by Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Call-to-action")
+
+plot3 <- ggpredict(model1, "Poverty_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted CTA by Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Call-to-action")
+
+# Create the combined plot
+combined_plot1 <- plot1/(plot2 + plot3)
+
+# Print the combined plot
+print(combined_plot1)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_CTA.png", plot = combined_plot1, width = 8, height = 4, units = "in")
+```
+
+
+#Risk
+
+```{r}
+model2<- glm(New_Risk ~ Trifecta + Minority_percent + Poverty_percent,
+                 family = binomial,
+                 data = df2)
+summary(model2)
+```
+
+```{r}
+model_parameters(model2,  exponentiate = TRUE)
+```
+
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model2, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Risks") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model2, "Minority_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Risks")
+
+plot3 <- ggpredict(model2, "Poverty_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Risks")
+
+# Create the combined plot
+combined_plot2 <- plot1/(plot2 + plot3)
+
+# Print the combined plot
+print(combined_plot2)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_Risks.png", plot = combined_plot2, width = 8, height = 4, units = "in")
+```
+
+#Expectancy 
+
+```{r}
+model3<- glm(New_Eff ~ Trifecta + Minority_percent + Poverty_percent + cases,
+                 family = binomial,
+                 data = df2)
+summary(model3)
+```
+
+
+```{r}
+model_parameters(model3,  exponentiate = TRUE)
+```
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model3, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Outcome Expectancy") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model3, "Minority_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by 
+       Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Outcome Expectancy")
+
+plot3 <- ggpredict(model3, "Poverty_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by 
+       Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Outcome Expectancy")
+
+# Create the combined plot
+combined_plot3 <- plot1/(plot2 + plot3)
+
+# Print the combined plot
+print(combined_plot3)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_Expectancy.png", plot = combined_plot3, width = 8, height = 4, units = "in")
+```
+
+===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE
+
+
+##Prepare for modellings 
+
+```{r}
+library(ggplot2)
+
+# Combine the four variables into one long format
+p2_long <- tidyr::gather(p2, key = "Variable", value = "Value", Positive_eff, Negative_eff, Individual_eff, Collective_eff)
+
+# Create a grouped boxplot with all four variables
+ggplot(p2_long, aes(x = Variable, y = Value, fill = Variable)) +
+  geom_boxplot() +
+  ylab("Value") +
+  ggtitle("Boxplots of Variables with Outliers") +
+  theme(legend.position = "none")
+```
+
+```{r}
+table(p2$Positive_eff)
+table(p2$Negative_eff)
+table(p2$Individual_eff)
+table(p2$ Collective_eff)
+
+```
+
+```{r}
+#cor(p2$Poverty_percent, p2$Prosperity_ranking)
+#cor(p2$White_percent, p2$Minority_percent)
+#cor(p2$Pre_Action, p2$Uncertainty_Reduction)
+#cor(p2$Social_Disparities, p2$Risk_Factor)
+```
+
+
+```{r}
+# Calculate the variation and mean of X
+variance_Positive_eff <- var(p2$Positive_eff,  na.rm = TRUE)
+mean_Positive_eff <- mean(p2$Positive_eff,  na.rm = TRUE)
+print(variance_Positive_eff)
+print(mean_Positive_eff)
+```
+
+```{r}
+
+# Calculate the variation and mean of X
+variance_Negative_eff <- var(p2$Negative_eff,  na.rm = TRUE)
+mean_Negative_eff <- mean(p2$Negative_eff,  na.rm = TRUE)
+print(variance_Negative_eff)
+print(mean_Negative_eff)
+```
+
+```{r}
+# Calculate the variation and mean of X
+variance_Collective_eff <- var(p2$Collective_eff, na.rm = TRUE)
+mean_Collective_eff <- mean(p2$Collective_eff,  na.rm = TRUE)
+print(variance_Collective_eff )
+print(mean_Collective_eff )
+```
+
+```{r}
+# Calculate the variation and mean of X
+variance_Individual_eff <- var(p2$Individual_eff,  na.rm = TRUE)
+mean_Individual_eff <- mean(p2$Individual_eff,  na.rm = TRUE)
+print(variance_Individual_eff )
+print(mean_Individual_eff )
+```
+
+
+#RQ2a: To what extent risk communication effect health efficacy? 
+
+```{r}
+# Convert selected columns to numeric
+p2[, c("Social_Disparities", "Risk_Factor", "Uncertainty_Reduction", "Debunk_MI")] <- 
+  sapply(p2[, c("Social_Disparities", "Risk_Factor", "Uncertainty_Reduction", "Debunk_MI")], as.numeric)
+
+# Calculate the correlation
+correlation_matrix <- cor(p2[, c("Social_Disparities", "Risk_Factor", "Uncertainty_Reduction", "Debunk_MI")])
+
+# Print the correlation matrix
+print(correlation_matrix)
+
+```
+
+```{r}
+glimpse(p2)
+table(p2$Social_Disparities)
+table(p2$Risk_Factor)
+table(p2$Debunk_MI)
+table(p2$Uncertainty_Reduction)
+```
+
+# Positive eff
+```{r}
+#transform variable
+p2 <- na.omit(p2)
+M2a <- zeroinfl(Positive_eff ~ Social_Disparities + 
+                            Risk_Factor +
+                            Uncertainty_Reduction +
+                            Debunk_MI,
+                 dist = 'poisson',
+                 data = p2)
+summary(M2a)
+```
+
+
+```{r}
+#transform variable
+p2 <- na.omit(p2)
+M2a_1 <- zeroinfl(Positive_eff ~ Social_Disparities + 
+                            Risk_Factor +
+                            Uncertainty_Reduction +
+                            Debunk_MI,
+                 dist = 'negbin',
+                 data = p2)
+summary(M2a_1)
+```
+
+```{r}
+missing_columns <- colnames(p2)[apply(is.na(p2), 2, any)]
+missing_columns
+```
+
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_testa <- vuong(M2a, M2a_1)
+
+# View the results of the Vuong test
+summary(vuong_testa)
+```
+
+#The results of the Vuong test you provided indicate a highly significant preference for "model2" over "model1." Here's the interpretation of the results:
+
+#Raw, AIC-corrected, and BIC-corrected z-statistics: -5.756312 Alternative hypothesis (H_A): "model2 > model1" p-value: 4.2986e-09 (which is very close to zero)
+
+#Interpretation: The p-value is extremely small (close to zero), indicating strong statistical evidence that "model2" is significantly better than "model1" in terms of its fit to the data. This suggests a clear preference for "model2" based on the test results.
+
+#In summary, the very low p-value and negative z-statistics provide robust evidence that "model2" outperforms "model1" in explaining the data. This is a highly significant result in favor of "model2."
+
+==> negbin use 
+
+```{r}
+model_parameters(M2a_1)
+```
+
+```{r}
+# Define the APA-style theme
+theme_apa <- function() {
+  theme_minimal() +
+    theme(
+      text = element_text(family = "Times New Roman", size = 10),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.text = element_text(size = 10),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      panel.background = element_blank(),
+      legend.position = "right",
+      legend.text = element_text(size = 12), 
+      axis.line = element_line(color = "black")
+    )
+}
+```
+
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(ggeffects)
+
+# Create ggeffects objects for Risk_Factor and Social_Disparities
+ge_risk <- ggpredict(M2a_1, terms = "Risk_Factor")
+ge_social <- ggpredict(M2a_1, terms = "Social_Disparities")
+
+# Create data frames for both boxplots
+boxplot_data_risk <- data.frame(
+  Group = "Risk Factors",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_risk$predicted,
+  CI_lower = ge_risk$conf.low,
+  CI_upper = ge_risk$conf.high
+)
+
+boxplot_data_social <- data.frame(
+  Group = "Social Disparities",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_social$predicted,
+  CI_lower = ge_social$conf.low,
+  CI_upper = ge_social$conf.high
+)
+
+# Combine the data frames
+combined_data <- rbind(boxplot_data_risk, boxplot_data_social)
+
+# Create a boxplot with facets
+ggplot(combined_data, aes(x = as.factor(Risk_Factor), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted POE by RF and SD",
+       x = "RF and SD Factors",
+       y = "POE") +
+  scale_x_discrete(labels = c("No", "Yes")) +
+  facet_grid(. ~ Group) +  # Facet by Group (Risk Factor and Social Disparities)
+  theme_apa()
+
+# Save the combined boxplot as a PNG file
+ggsave("risk_POE.png", plot = last_plot(), width = 8, height = 4, units = "in")
+```
+
+
+#Negative eff
+```{r}
+p2 <- na.omit(p2)
+M2b <- zeroinfl(Negative_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI,
+                 dist = 'poisson',
+                 data = p2)
+summary(M2b)
+```
+
+
+```{r}
+p2 <- na.omit(p2)
+M2b_1 <- zeroinfl(Negative_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI,
+                 dist = 'negbin',
+                 data = p2)
+summary(M2b_1)
+```
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_testb <- vuong(M2b, M2b_1)
+
+# View the results of the Vuong test
+summary(vuong_testb)
+```
+
+#The Vuong test results you provided indicate a preference for "model2" over "model1" but with a less significant p-value. Here's the interpretation of the results:
+
+#Raw, AIC-corrected, and BIC-corrected z-statistics: -1.320079
+#Alternative hypothesis (H_A): "model2 > model1"
+#p-value: 0.093404
+#Interpretation: The p-value is 0.093404, which is not extremely small but still below the conventional significance level of 0.05. This suggests that there is some evidence that "model2" might be better than "model1," but the evidence is not as strong as in cases with much smaller p-values. Therefore, the preference for "model2" is not as clear as in cases with highly significant results.
+
+#In summary, the results suggest that there may be a preference for "model2," but the evidence is not very strong based on the p-value. The interpretation of the Vuong test results should take into consideration the specific context of your analysis and your chosen significance level.
+
+==> poisson 
+
+
+```{r}
+model_parameters(M2b)
+```
+
+```{r}
+# Create ggeffects objects for Risk_Factor and Social_Disparities
+ge_social <- ggpredict(M2b, terms = "Social_Disparities")
+ge_debunk <- ggpredict(M2b, terms = "Debunk_MI")
+
+# Create data frames for both boxplots
+boxplot_data_social <- data.frame(
+  Group = "Social Disparities",  # Add a Group column to identify the data source
+  Social_Disparities = c(0, 1),
+  Predicted = ge_social$predicted,
+  CI_lower = ge_social$conf.low,
+  CI_upper = ge_social$conf.high
+)
+
+boxplot_data_debunk <- data.frame(
+  Group = "Debunking Misinformation",  # Add a Group column to identify the data source
+  Social_Disparities = c(0, 1),  # Ensure that the column name matches the previous data frame
+  Predicted = ge_debunk$predicted,
+  CI_lower = ge_debunk$conf.low,
+  CI_upper = ge_debunk$conf.high
+)
+
+
+# Combine the data frames
+combined_data1 <- rbind(boxplot_data_debunk, boxplot_data_social)
+
+# Create a boxplot with facets
+ggplot(combined_data1, aes(x = as.factor(Social_Disparities), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted NOE by SD and DM",
+       x = "SD and DM Factors",
+       y = "NOE") +
+  scale_x_discrete(labels = c("No", "Yes")) +
+  facet_grid(. ~ Group) +  # Facet by Group (Risk Factor and Social Disparities)
+  theme_apa()
+
+# Save the combined boxplot as a PNG file
+ggsave("risk_NOE.png", plot = last_plot(), width = 8, height = 4, units = "in")
+```
+
+
+#Collective eff
+
+```{r}
+p2 <- na.omit(p2)
+M2c <- zeroinfl(Collective_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI,
+                 dist = 'poisson',
+                 data = p2)
+summary(M2c)
+```
+
+```{r}
+p2 <- na.omit(p2)
+M2c_1 <- zeroinfl(Collective_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI, dist = 'geometric',
+                 data = p2)
+summary(M2c_1)
+```
+
+```{r}
+cor(p2[, c("Social_Disparities", "Risk_Factor", "Uncertainty_Reduction", "Debunk_MI")])
+
+```
+
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_testc <- vuong(M2c, M2c_1)
+
+# View the results of the Vuong test
+summary(vuong_testc)
+```
+
+==> geometric 
+
+```{r}
+model_parameters(M2c_1)
+```
+
+Incorporating regularization techniques like Lasso (L1 regularization) or Ridge (L2 regularization) into a zero-inflated model can help avoid overfitting and improve model performance. To apply these techniques, you would need to use specialized packages or functions that support regularized models. In R, the glmnet package is commonly used for this purpose. Here's how you can use Lasso and Ridge regression with zero-inflated models:
+
+```{r}
+library(ggeffects)
+library(patchwork)
+library(ggplot2)
+
+# Create ggeffects objects for Risk_Factor and Social_Disparities
+ge_risk <- ggpredict(M2c_1, terms = "Risk_Factor")
+ge_social <- ggpredict(M2c_1, terms = "Social_Disparities")
+ge_uncertain <- ggpredict(M2c_1, terms = "Uncertainty_Reduction")
+ge_debunk <- ggpredict(M2c_1, terms = "Debunk_MI")
+
+boxplot_data_social <- data.frame(
+  Group = "SD",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_social$predicted,
+  CI_lower = ge_social$conf.low,
+  CI_upper = ge_social$conf.high
+)
+
+# Create data frames for both boxplots
+boxplot_data_risk <- data.frame(
+  Group = "RF",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_risk$predicted,
+  CI_lower = ge_risk$conf.low,
+  CI_upper = ge_risk$conf.high
+)
+
+boxplot_data_uncertain <- data.frame(
+  Group = "UR",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_uncertain$predicted,
+  CI_lower = ge_uncertain$conf.low,
+  CI_upper = ge_uncertain$conf.high
+)
+
+# Create data frames for both boxplots
+boxplot_data_debunk <- data.frame(
+  Group = "DM",  # Add a Group column to identify the data source
+  Risk_Factor = c(0, 1),
+  Predicted = ge_debunk$predicted,
+  CI_lower = ge_debunk$conf.low,
+  CI_upper = ge_debunk$conf.high
+)
+
+# Combine the data frames
+combined_data <- rbind(boxplot_data_risk, boxplot_data_social, 
+                       boxplot_data_uncertain, boxplot_data_debunk)
+
+# Create the individual plots
+plot1 <- ggplot(combined_data[combined_data$Group == "RF", ], aes(x = as.factor(Risk_Factor), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted COE by RF",
+       x = "RF",
+       y = "COE") +
+  scale_x_discrete(labels = c("0", "1")) +  # Set x-axis labels to "0" and "1"
+  facet_grid(. ~ Group) +
+  theme_apa()
+
+plot2 <- ggplot(combined_data[combined_data$Group == "SD", ], aes(x = as.factor(Risk_Factor), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted COE by SD",
+       x = "SD",
+       y = "COE") +
+  scale_x_discrete(labels = c("0", "1")) +  # Set x-axis labels to "0" and "1"
+  facet_grid(. ~ Group) +
+  theme_apa()
+
+plot3 <- ggplot(combined_data[combined_data$Group == "UR", ], aes(x = as.factor(Risk_Factor), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted COE by UR",
+       x = "UR",
+       y = "COE") +
+  scale_x_discrete(labels = c("0", "1")) +  # Set x-axis labels to "0" and "1"
+  facet_grid(. ~ Group) +
+  theme_apa()
+
+plot4 <- ggplot(combined_data[combined_data$Group == "DM", ], aes(x = as.factor(Risk_Factor), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted COE by DM",
+       x = "DM",
+       y = "COE") +
+  scale_x_discrete(labels = c("0", "1")) +  # Set x-axis labels to "0" and "1"
+  facet_grid(. ~ Group) +
+  theme_apa()
+
+# Combine the plots into a 2x2 grid layout
+combined_plots <- (plot1 + plot2) / (plot3 + plot4)
+combined_plots
+
+# Save the combined plots as a PNG file
+ggsave("risk_COE.png", plot = combined_plots, width = 8, height = 8, units = "in")
+
+```
+
+
+#Individual Eff 
+```{r}
+M2d <- zeroinfl(Individual_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI, 
+                 dist = 'poisson',
+                 data = p2)
+summary(M2d)
+```
+
+
+```{r}
+M2d_1 <- zeroinfl(Individual_eff ~ Social_Disparities + 
+                            Risk_Factor + 
+                            Uncertainty_Reduction +
+                            Debunk_MI, 
+                 dist = 'geometric',
+                 data = p2)
+summary(M2d_1)
+```
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_testd <- vuong(M2d, M2d_1)
+
+# View the results of the Vuong test
+summary(vuong_testd)
+```
+
+#The Vuong z-statistic results you've provided suggest strong evidence in favor of "model2" over "model1." Here's the interpretation of the results:
+
+#Raw, AIC-corrected, and BIC-corrected z-statistics: -4.257699
+#Alternative hypothesis (H_A): "model2 > model1"
+#p-value: 1.0327e-05 (very close to zero)
+#Interpretation: The p-value is extremely small (1.0327e-05, which is close to zero), indicating strong statistical evidence in support of the alternative hypothesis, "model2 > model1." In other words, it strongly suggests that "model2" is a significantly better model compared to "model1."
+
+#This suggests that "model2" is the preferred model based on the Vuong test, and this preference is highly statistically significant. In practical terms, it #means that "model2" likely provides a better fit or explanation for the data compared to "model1."
+
+==> geometric 
+
+```{r}
+model_parameters(M2d_1)
+```
+
+#Type III ANOVA 
+
+```{r}
+library(car)
+Anova(M2a_1, type = 2)
+Anova(M2b, type = 2)
+Anova(M2c_1, type = 2)
+Anova(M2d_1, type = 2)
+```
+
+
+
+
+#RQ2b: To what extent socio-economic factors effect health efficacy? 
+```{r}
+require(pscl)
+require(car)
+require(MASS)
+require(boot)
+library(lattice) # alternatively can use package ZIM for zero-inflated models
+library(lmtest)
+library(tidyverse)
+library(cowplot)
+```
+
+```{r}
+p4 <- p2 %>% 
+  mutate(Trifecta = as.factor(Trifecta)) 
+p4
+```
+
+#Positive_eff 
+```{r}
+p4 <- na.omit(p4)
+M2b1 <- zeroinfl(Positive_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent,
+                 dist = "poisson",
+                 data = p4)
+summary(M2b1)
+```
+
+```{r}
+p4 <- na.omit(p4)
+M2b1_a <- zeroinfl(Positive_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent,
+                 dist = "negbin",
+                 data = p4)
+summary(M2b1_a)
+```
+
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_test1 <- vuong(M2b1, M2b1_a)
+
+# View the results of the Vuong test
+summary(vuong_test1)
+```
+
+==> negbin 
+
+```{r}
+model_parameters(M2b1_a)
+```
+
+
+```{r}
+library(ggeffects)
+library(patchwork)
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(M2b1_a, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted POE by GT",
+       x = "GT",
+       y = "POE") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(M2b1_a, "Minority_percent") |> plot() + theme_apa() +
+   labs(title = "Predicted POE by MP",
+       x = "MP %",
+       y = "POE") #+
+  #scale_x_discrete(labels = c("No", "Yes"))
+
+plot3 <- ggpredict(M2b1_a, "Poverty_percent") |> plot() + theme_apa() + 
+   labs(title = "Predicted POE by PP",
+       x = "PP %",
+       y = "POE") 
+
+# Create the combined plot
+combined_plot3 <- plot1/(plot2 + plot3)
+
+# Print the combined plot
+print(combined_plot3)
+
+# Save the combined boxplot as a PNG file
+ggsave("SES_POE.png", plot = last_plot(), width = 8, height = 4, units = "in")
+
+```
+
+
+#Negative eff
+```{r}
+M2b2 <- zeroinfl(Negative_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = "poisson", 
+                 data = p4)
+summary(M2b2)
+```
+
+```{r}
+M2b2_a <- zeroinfl(Negative_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = "negbin", 
+                 data = p4)
+summary(M2b2_a)
+```
+
+
+```{r}
+M2b2_b <- zeroinfl(Negative_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = "geometric", 
+                 data = p4)
+summary(M2b2_b)
+```
+
+
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_test2 <- vuong(M2b2, M2b2_a)
+vuong_test2_a <- vuong(M2b2_a, M2b2_b)
+vuong_test2_b <- vuong(M2b2, M2b2_b)
+
+# View the results of the Vuong test
+#summary(vuong_test2)
+```
+
+==> negbin
+
+```{r}
+model_parameters(M2b2_a)
+```
+
+```{r}
+library(ggeffects)
+library(patchwork)
+# Create individual ggpredict plots and assign them to variable
+
+plot2 <- ggpredict(M2b2_a, "Minority_percent") |> plot() + theme_apa() +
+   labs(title = "Predicted NOE by MP",
+       x = "MP %",
+       y = "POE") #+
+  #scale_x_discrete(labels = c("No", "Yes"))
+
+plot3 <- ggpredict(M2b2_a, "Poverty_percent") |> plot() + theme_apa() + 
+   labs(title = "Predicted NOE by PP",
+       x = "PP %",
+       y = "POE") 
+
+# Create the combined plot
+combined_plot<- plot2/plot3
+
+# Print the combined plot
+print(combined_plot)
+
+# Save the combined boxplot as a PNG file
+ggsave("SES_NOE.png", plot = last_plot(), width = 8, height = 4, units = "in")
+```
+
+#Collective eff
+```{r}
+M2b3 <- zeroinfl(Collective_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = 'poisson',
+                 data = p4)
+summary(M2b3)
+```
+
+
+```{r}
+M2b3_1 <- zeroinfl(Collective_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = 'negbin',
+                 data = p4)
+summary(M2b3_1)
+```
+
+
+```{r}
+vuong_test2 <- vuong(M2b3, M2b3_1)
+```
+
+==> negbin
+
+```{r}
+model_parameters(M2b3_1)
+```
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(M2b3, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted COE by GT",
+       x = "GT",
+       y = "COE")
+
+plot2 <- ggpredict(M2b3, "Minority_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted COE by MP",
+       x = "MP %",
+       y = "COE")
+
+combined_plot5 <- plot_grid(plot1, 
+                            plot2,
+                            ncol = 1)
+
+# Print the combined plot
+print(combined_plot5)
+
+# Save the combined boxplot as a PNG file
+ggsave("SES_COE.png", plot = combined_plot5, width = 8, height = 4, units = "in")
+```
+
+
+#Individual Eff 
+```{r}
+M2b4 <- zeroinfl(Individual_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = 'poisson',
+                 data = p4)
+summary(M2b4)
+```
+
+```{r}
+M2b4_a <- zeroinfl(Individual_eff ~ Trifecta + 
+                            Minority_percent + 
+                            Poverty_percent, 
+                 dist = 'geometric',
+                 data = p4)
+summary(M2b4_a)
+```
+
+```{r}
+# Run the Vuong test to compare the models
+vuong_test4 <- vuong(M2b4, M2b4_a)
+```
+
+==> geometric 
+
+```{r}
+model_parameters(M2b4_a)
+```
+
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(M2b4_a, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted IOE by GT",
+       x = "GT",
+       y = "IOE")
+plot2 <- ggpredict(M2b4_a, "Minority_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted IOE by MP",
+       x = "MP %",
+       y = "IOE")
+
+plot3 <- ggpredict(M2b4_a, "Poverty_percent") |> plot() + theme_apa() +
+  labs(title = "Predicted IOE by PP",
+       x = "PP %",
+       y = "IOE")
+
+# Create the combined plot
+combined_plot6 <- plot1/(plot2 + plot3)
+
+# Print the combined plot
+print(combined_plot6)
+
+# Save the combined boxplot as a PNG file
+ggsave("SES_IOE.png", plot = combined_plot6, width = 8, height = 4, units = "in")
+```
+
+```{r}
+library(car)
+Anova(M2b1_a, type = 2)
+Anova(M2b2_a, type = 2)
+Anova(M2b3_1, type = 2)
+Anova(M2b4_a, type = 2)
+```
+
+# Question 3: How CTA is predicted by risk factors and socio-economic factors
+
+
+
+#LOGISTIC 
+ Convert pre_Action to a binary variable
+```{r}
+library(tidyverse)
+p2b <- p2 %>% 
+  mutate(Pre_Action1 = case_when(
+    Pre_Action == '0' ~ 0,
+    Pre_Action %in% c('1', '10', '11', '12', '13', '14', '17') ~ 1,
+    TRUE ~ NA_real_
+  ))
+p2b
+```
+
+#risk factors 
+```{r}
+model1 <- glm(Pre_Action1 ~ Risk_Factor + Social_Disparities + 
+                Debunk_MI + Uncertainty_Reduction, 
+               data = p2b, family = binomial)
+summary(model1)
+```
+
+```{r}
+library(easystats)
+library(ggeffects)
+model_parameters(model1)
+```
+
+```{r}
+# Create ggeffects objects for Risk_Factor and Social_Disparities
+ge_social <- ggpredict(model1, terms = "Uncertainty_Reduction")
+ge_debunk <- ggpredict(model1, terms = "Risk_Factor")
+
+# Create data frames for both boxplots
+boxplot_data_social <- data.frame(
+  Group = "Uncertainty Reduction",  # Add a Group column to identify the data source
+  Uncertainty_Reduction = c(0, 1),
+  Predicted = ge_social$predicted,
+  CI_lower = ge_social$conf.low,
+  CI_upper = ge_social$conf.high
+)
+
+boxplot_data_risk <- data.frame(
+  Group = "Risk_Factor",  # Add a Group column to identify the data source
+  Uncertainty_Reduction = c(0, 1),  # Ensure that the column name matches the previous data frame
+  Predicted = ge_debunk$predicted,
+  CI_lower = ge_debunk$conf.low,
+  CI_upper = ge_debunk$conf.high
+)
+
+
+# Combine the data frames
+combined_dataz <- rbind(boxplot_data_social, boxplot_data_risk)
+
+# Create a boxplot with facets
+ggplot(combined_dataz, aes(x = as.factor(Uncertainty_Reduction ), y = Predicted)) +
+  geom_boxplot() +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, position = position_dodge(0.75)) +
+  labs(title = "Predicted CTA by RF and UR",
+       x = "RF and UR Factors",
+       y = "CTA") +
+  scale_x_discrete(labels = c("No", "Yes")) +
+  facet_grid(. ~ Group) +  # Facet by Group (Risk Factor and Social Disparities)
+  theme_apa()
+
+# Save the combined boxplot as a PNG file
+ggsave("CTA_risk.png", plot = last_plot(), width = 8, height = 4, units = "in")
+```
+
+
+
+#socio 
+```{r}
+model2 <- glm(Pre_Action1 ~ Trifecta + Minority_percent +  
+                Poverty_percent , data = p2b, family = binomial)
+summary(model2)
+```
+
+```{r}
+library(easystats)
+library(ggeffects)
+model_parameters(model2)
+```
+```{r}
+plotb1 <- ggpredict(model2, "Poverty_percent[all]") |> plot() + theme_apa() +
+  labs(title = "Predicted CTA by PP",
+       x = "PP %",
+       y = "CTA")
+plotb1
+
+#save
+ggsave("CTA_SES.png", plot = plotb1, width = 8, height = 4, units = "in")
+```
+
+==========END HERE===================END HERE===================END HERE========
+

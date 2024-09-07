@@ -1,0 +1,515 @@
+---
+title: "ICA_models"
+output: html_document
+date: "2023-03-06"
+---
+
+#download packages
+```{r message = FALSE}
+require(ggplot2)
+library(tidyverse)
+library(dplyr)
+require(car)
+require(MASS)
+require(boot)
+library(lattice) # alternatively can use package ZIM for zero-inflated models
+library(lmtest)
+library(MASS)
+library(tidyverse)
+library(easystats)
+library(ggeffects)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(cowplot)
+```
+
+
+```{r message = FALSE}
+p <- read_csv("DOH.csv")
+p
+```
+
+```{r}
+# Install and load the openxlsx package
+#install.packages("openxlsx")
+#library(openxlsx)
+
+# Assuming p is your dataframe
+# Replace this with your actual dataframe
+# For example, p <- read.csv('your_data.csv') or p <- data.frame(...)
+
+# Write the dataframe to an Excel file
+#write.xlsx(p, file = "DOH_Final.xlsx")
+
+```
+
+
+#Change variable names 
+```{r}
+p1 <- 
+  p %>% 
+  rename(State_recode = `State_ recode`, 
+        White_percent = `White_\bpercent`, 
+        Risk_Factor ='RiskFactor_2_CTA', 
+        Social_Disparities = 'SocialDisparities_3_CTA', 
+        Debunk_MI = 'Debunk_4_CTA',
+        Uncertainty_Reduction = 'UncertaintyReduction_5_CTA',  
+        Testing = 'Testing_6_CTA', 
+        Vaccine = 'Vaccine_7_CTA', 
+        Pre_Action = 'Action_13_CTA', 
+        Positive_eff = 'Positive_14a_Number', 
+        Negative_eff = 'Negative_14b_Number', 
+        Individual_eff = 'Individual_14c_Number', 
+        Collective_eff = 'Collective_14d_Number', 
+        Prosperity_ranking = 'ProspertiyRanking', 
+        Minority_percent = 'minority_percent'
+  ) 
+```
+
+#Frequency with 88
+```{r}
+# Plotting frequency distribution for each variable
+for (col in names(p1)) {
+  if (is.numeric(p1[[col]])) {
+    plot <- ggplot(p1, aes_string(x = as.name(col))) +
+      geom_bar() +
+      labs(title = paste("Frequency Distribution of", col),
+           x = col,
+           y = "Frequency")
+    print(plot)
+    # Save or print the plot as needed
+    # ggsave(paste("plot_", col, ".png", sep=""), plot = plot, device = "png")
+  }
+}
+```
+
+
+```{r}
+p4 <- 
+  p1 %>% 
+  mutate_all(~ ifelse(. %in% c('88', '888', "99", "999"), 0, .))
+p4
+
+```
+
+
+```{r}
+table(p4$Uncertainty_Reduction)
+table(p4$Testing)
+table(p4$Vaccine)
+```
+
+#frequency without 88
+```{r}
+# Plotting frequency distribution for each variable
+for (col in names(p4)) {
+  if (is.numeric(p4[[col]])) {
+    plot1 <- ggplot(p4, aes_string(x = as.name(col))) +
+      geom_bar() +
+      labs(title = paste("Frequency Distribution of", col),
+           x = col,
+           y = "Frequency")
+    print(plot1)
+    # Save or print the plot as needed
+    # ggsave(paste("plot_", col, ".png", sep=""), plot = plot, device = "png")
+  }
+}
+```
+
+
+============ 
+#Transform to bi-nominal only 1 and 0 for various variables 
+```{r}
+p3 <- 
+  p1 %>% 
+mutate(Risk_Factor = ifelse(Risk_Factor %in% c('88', '888'), 0, 1)) %>% 
+mutate(Social_Disparities = ifelse(Social_Disparities %in% c('88', '888'), 0, 1)) %>% 
+mutate(Debunk_MI = ifelse(Debunk_MI %in% c('88', '888'), 0, 1)) %>% 
+mutate(Uncertainty_Reduction = ifelse(Uncertainty_Reduction %in% c('88', '888'), 0, 1))
+p3
+```
+
+```{r}
+glimpse(p3)
+```
+
+```{r}
+table(p3$Risk_Factor)
+table(p3$Social_Disparities)
+table(p3$Debunk_MI)
+table(p3$Uncertainty_Reduction)
+```
+
+```{r}
+table(p3$Positive_eff)
+table(p3$Negative_eff)
+table(p3$Collective_eff)
+table(p3$Individual_eff)
+
+```
+
+
+```{r}
+# Check the column names in p3
+colnames(p3)
+
+# Check the data types in p3 for relevant columns
+str(p3[c("Risk_Factor", "Social_Disparities", "Debunk_MI", "Uncertainty_Reduction")])
+
+# Modify the code to select the columns
+p2 <- p3 %>%
+  mutate(
+    Risk_Factor = as.factor(Risk_Factor),
+    Social_Disparities = as.factor(Social_Disparities),
+    Debunk_MI = as.factor(Debunk_MI),
+    Uncertainty_Reduction = as.factor(Uncertainty_Reduction)
+  )
+p2
+```
+
+```{r}
+# write a csv file of the p2
+write.csv(p2, file = "p2.csv", row.names = FALSE)
+```
+
+===== NEW==== 
+
+```{r}
+glimpse(p3) 
+```
+
+```{r}
+colnames(p2)
+```
+
+```{r}
+table(p3$Pre_Action)
+```
+
+```{r}
+na_check_Risk_Factor <- any(is.na(p2$Risk_Factor))
+na_check_Risk_Factor
+na_check_Social_Disparities <- any(is.na(p2$Social_Disparities))
+na_check_Social_Disparities 
+na_check_Debunk_MI <- any(is.na(p2$Debunk_MI))
+na_check_Debunk_MI
+na_check_Uncertainty_Reduction <- any(is.na(p2$Uncertainty_Reduction))
+na_check_Uncertainty_Reduction 
+```
+
+========
+#RQ1: To what extent do the state health departments communicate about risks (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) related to COVID-19 on their Facebook accounts between January and December 2020?
+```{r}
+table(p2$Risk_Factor)
+table(p2$Social_Disparities)
+table(p2$Debunk_MI )
+table(p2$Uncertainty_Reduction)
+```
+
+#RQ2:To what extent do the state health departments communicate outcome expectancies (2a)? What are the differences between the use of different types of expectancies (positive or negative and individual versus collective) on state health departments’  Facebook accounts between January and December 2020 (2b)?
+```{r}
+# Assuming you have two vectors: p2$Positive_eff and p2$Negative_eff
+# Perform a two-sample t-test
+result_t_test1 <- t.test(p2$Positive_eff, p2$Negative_eff)
+
+# Print the results
+print(result_t_test1)
+
+```
+#parameters
+```{r}
+model_parameters(result_t_test1)
+```
+# z-test "Collective_eff - Individual_eff" 
+```{r}
+result_t_test2 <- t.test(p2$Collective_eff, p2$Individual_eff)
+result_t_test2
+```
+#parameters
+```{r}
+model_parameters(result_t_test2)
+```
+
+
+
+#RQ3:To what extent do state health departments incorporate a set of risk persuasion techniques (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) in their call-to-action regarding COVID-19 between January and December 2020?
+
+```{r}
+df <- p3 %>%
+  mutate(
+    Pre_Action = ifelse(Pre_Action == 0 | Pre_Action == 88, 0, 1), 
+    New_Risk = ifelse(Risk_Factor + Social_Disparities + Debunk_MI + Uncertainty_Reduction == 0, 0, 1), 
+    New_Eff = ifelse(Positive_eff  + Negative_eff + Individual_eff + Collective_eff == 0, 0, 1)
+  ) %>%
+  filter(Pre_Action == 1)
+df
+```
+
+
+```{r}
+glimpse(df)
+table(df$Pre_Action)
+table(df$New_Risk)
+table(df$New_Eff)
+```
+
+
+
+```{r}
+# Define the APA-style theme
+theme_apa <- function() {
+  theme_minimal() +
+    theme(
+      text = element_text(family = "Times New Roman", size = 10),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.text = element_text(size = 10),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      panel.background = element_blank(),
+      legend.position = "right",
+      legend.text = element_text(size = 12), 
+      axis.line = element_line(color = "black")
+    )
+}
+```
+
+
+Run Chi-Square for New_Risk
+
+```{r}
+# Create a contingency table
+contingency_New_Risk <- table(df$New_Risk)
+# Perform the chi-square test
+chi_square_New_Risk <- chisq.test(contingency_New_Risk)
+# Print the results
+chi_square_New_Risk
+```
+
+
+```{r}
+model_parameters(chi_square_New_Risk)
+```
+
+```{r}
+# Create a data frame with the Chi-squared statistic and p-value
+results <- data.frame(Test = "chi_square_New_Risk", Chi2 = chi_square_New_Risk$statistic, p = chi_square_New_Risk$p.value)
+
+# Create a horizontal bar chart-like visualization
+library(ggplot2)
+ggplot(results, aes(x = Test, y = Chi2, fill = p < 0.001)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  labs(title = "Chi-squared test for given probabilities",
+       y = "Chi-squared statistic") +
+  scale_fill_manual(values = c("TRUE" = "purple", "FALSE" = "blue")) +
+  coord_flip() +
+  theme_apa()
+```
+
+============ 
+
+#RQ4: To what extent do state-level poverty, percentage of minority populations and government trifecta predict  state health departments’ risk persuasion techniques (i.e., uncertainty reduction, health risk factors, misinformation correction and disparities) (4a), outcome expectancies (4b) and call-to-action (4c) on state health departments’ Facebook accounts between January and December 2020?
+
+```{r}
+df1 <- p3 %>% 
+   mutate(
+    Pre_Action = ifelse(Pre_Action == 0 | Pre_Action == 88, 0, 1), 
+    New_Risk = ifelse(Risk_Factor + Social_Disparities + Debunk_MI + Uncertainty_Reduction == 0, 0, 1), 
+    New_Eff = ifelse(Positive_eff  + Negative_eff + Individual_eff + Collective_eff == 0, 0, 1)
+  ) 
+df1
+```
+
+
+
+```{r}
+df1 
+glimpse(df1)
+```
+
+```{r}
+table(df1$Pre_Action)
+table(df1$New_Risk)
+table(df1$New_Eff)
+```
+
+```{r}
+df2 <- df1 %>% 
+   #mutate_at(vars(Pre_Action, New_Risk, New_Eff), ~ifelse(. == 0, 0, 1)) %>  
+   mutate(Trifecta = as.factor(Trifecta))
+df2  
+```
+
+```{r}
+glimpse(df2)
+table(df2$Pre_Action)
+table(df2$New_Risk)
+table(df2$New_Eff)
+```
+
+#CTA
+```{r}
+library(lmtest)
+model1 <- glm(Pre_Action ~ Trifecta + Minority_percent + Poverty_percent,
+              family = binomial,
+              data = df2)
+summary(model1)
+```
+
+```{r}
+model_parameters(model1, exponentiate = TRUE)
+```
+
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(M2b1_a, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted POE by GT",
+       x = "GT",
+       y = "POE") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+
+```{r}
+library(ggeffects)
+library(ggplot2)
+library(cowplot)
+
+
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model1, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Call-to-action by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Call-to-action") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model1, terms = "Minority_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted CTA by Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Call-to-action")
+
+plot3 <- ggpredict(model1, terms = "Poverty_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted CTA by Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Call-to-action")
+
+# Arrange the plots in a grid
+combined_plot1 <- plot_grid(plot1, plot2, plot3, ncol = 1)
+
+# Print the combined plot
+print(combined_plot1)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_CTA.png", plot = combined_plot1, width = 8, height = 4, units = "in")
+```
+
+
+#Risk
+
+```{r}
+model2<- glm(New_Risk ~ Trifecta + Minority_percent + Poverty_percent,
+                 family = binomial,
+                 data = df2)
+summary(model2)
+```
+
+```{r}
+model_parameters(model2,  exponentiate = TRUE)
+```
+
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model2, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Risks") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model2, terms = "Minority_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Risks")
+
+plot3 <- ggpredict(model2, terms = "Poverty_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted Risks by Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Risks")
+
+
+# Arrange the plots in a grid
+combined_plot2 <- plot_grid(plot2, plot3, ncol = 1)
+
+# Print the combined plot
+print(combined_plot2)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_Risks.png", plot = combined_plot2, width = 8, height = 4, units = "in")
+```
+
+#Expectancy 
+
+```{r}
+model3<- glm(New_Eff ~ Trifecta + Minority_percent + Poverty_percent,
+                 family = binomial,
+                 data = df2)
+summary(model3)
+```
+
+
+```{r}
+model_parameters(model3,  exponentiate = TRUE)
+```
+```{r}
+# Create individual ggpredict plots and assign them to variables
+plot1 <- ggpredict(model3, "Trifecta") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by Government Trifecta",
+       x = "Government Trifecta",
+       y = "Outcome Expectancy") +
+  scale_x_discrete(labels = c("No", "Yes"))
+
+plot2 <- ggpredict(model3, terms = "Minority_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by 
+       Minority Percentage",
+       x = "Minority Percentage %",
+       y = "Outcome Expectancy")
+
+plot3 <- ggpredict(model3, terms = "Poverty_percent [all]") |> plot() + theme_apa() +
+  labs(title = "Predicted Outcome Expectancy by 
+       Poverty Percentage",
+       x = "Poverty Percentage %",
+       y = "Outcome Expectancy")
+
+
+# Arrange the plots in a grid
+combined_plot3 <- plot_grid(plot1, plot2, plot3, ncol = 1)
+
+# Print the combined plot
+print(combined_plot3)
+
+# Save the combined boxplot as a PNG file
+ggsave("New_SED_Expectancy.png", plot = combined_plot3, width = 8, height = 4, units = "in")
+```
+
+===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE===o0o===END HERE
+
+
+modela <- glm(Pre_Action ~ cases,
+                 family = binomial,
+                 data = df2)
+summary(modela)
+
+
+
+modelb <- glm(New_Risk ~ cases,
+                 family = binomial,
+                 data = df2)
+summary(modelb)
+
+
+modelc <- glm(New_Eff ~ cases,
+                 family = binomial,
+                 data = df2)
+summary(modelc)
+
+
+

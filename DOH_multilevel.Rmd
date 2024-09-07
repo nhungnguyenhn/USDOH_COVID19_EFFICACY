@@ -1,0 +1,204 @@
+---
+title: "DOH_multilevel"
+author: "Nhung Nguyen"
+date: "2022-11-19"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+p <- read_csv("doh_done.csv")
+p
+```
+
+```{r}
+colnames(p)
+```
+
+```{r}
+summary(p)
+```
+
+
+```{r}
+p1 <- p %>% 
+  select(-mental_wellbeing, -Acknowledge_emotion, 
+         -Praise_good_actions,- toward_vulnerable_populations,- Use_language_disparities) %>% 
+mutate(Risk_factors = recode(Risk_factors, '88' = 0, '888'= 0,
+                                            '0'=1, '1'=1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                            '6'=1, '7'=1, '8'=1, '9'=1, '10'=1, 
+                                            '11'=1, '12'=1, '13'=1, '14'= 1, '15' =1, 
+                                            '16' =1, '18' =1, '20'=1, '25'=1, '26'=1)) %>%  
+         
+   mutate(Social_disparities = recode(Social_disparities, '88' = 0, 
+                                                        '0'=1, '1'=1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                                        '6'=1, '7'=1, '8'=1, '9'=1, '10'=1, 
+                                                        '11'=1, '12'=1, '13'=1, '14'= 1, '15' =1, 
+                                                        '26'=1)) %>% 
+   
+   mutate(Debunk_myth_disinformation = recode(Debunk_myth_disinformation,'88' = 0, 
+                                                '0'=1, '1'= 1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                                        '6'=1, '7'=1, '8'= 1, '9'= 1, '10'=1, 
+                                                        '11'=1, '15' =1)) %>% 
+          
+   mutate(Gov_activities =recode(Gov_activities, '88' = 0, 
+                                                        '0'=1, '1'=1, '2'=1,  '3'=1, '4'=1, '5'=1,
+                                                        '6'=1, '7'=1, '8'= 1, '9'=1, '10'=1, 
+                                                        '11'=1, '12'=1, '13'=1, '14'= 1, '15' =1, 
+                                                        '16' =1, '17'= 1, '18' =1, '25'=1, '26'=1)) %>% 
+  
+     mutate(Covid_Testing = recode(Covid_Testing, '88' = 0, 
+                                                   '0'=1, '1'=1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                                    '6'=1, '7'=1, '8'=1, '9'=1, '10'=1, 
+                                                    '11'=1, '12'=1, '13'=1, '14'= 1, '15' =1, 
+                                                    '18' =1, '25'=1, '26'=1)) %>%  
+         
+      mutate(Covid_vaccine = recode(Covid_vaccine, '88' = 0, 
+                                                  '0'=1, '1'=1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                                  '6'=1, '7'=1, '8'=1, '9'=1, '15' =1)) %>% 
+      mutate(Act_prevent_covid = recode(Act_prevent_covid, '88' = 0, 
+                                                  '0'=1, '1'=1, '2'=1, '3'=1, '4'=1, '5'=1,
+                                                  '6'=1, '7'=1, '8'=1, '9'=1, '15' =1,  '16' =1, '18' =1, 
+                                                  '25'=1, '26'=1))
+
+p1 
+```
+
+```{r}
+levels(p1$DOH)
+```
+
+
+
+```{r}
+table(p1$Risk_factors)
+table(p1$Social_disparities)
+table(p1$Debunk_myth_disinformation)
+table(p1$Gov_activities)
+table(p1$Covid_Testing)
+table(p1$Covid_vaccine)
+
+table(p1$Act_prevent_covid)
+table(p1$Efficacy_Positive_outcomes)
+table(p1$Efficacy_Negativ_outcomes)
+table(p1$Efficacy_Individual_outcomes)
+table(p1$Efficacy_Collective_outcomes)
+levels(p1$DOH)
+```
+
+```{r}
+ks.test(p1$Social_disparities, 'pnorm')
+```
+
+
+```{r}
+library("dplyr")
+library("ggpubr")
+ggdensity(p1$Act_prevent_covid, 
+          main = "Density plot of Act_prevent_covid",
+          xlab = "Act_prevent_covid")
+```
+
+```{r}
+ggdensity(p1$Efficacy_Positive_outcomes, 
+          main = "Density plot of Efficacy_Positive_outcomes",
+          xlab = "Efficacy_Positive_outcomes")
+```
+
+```{r}
+
+ggdensity(p1$Efficacy_Negativ_outcomes, 
+          main = "Efficacy_Negativ_outcomes",
+          xlab = "Efficacy_Negativ_outcomes")
+```
+
+
+
+```{r}
+
+ggdensity(p1$Efficacy_Individual_outcomes, 
+          main = "Density plot of Efficacy_Individual_outcomesr",
+          xlab = "Efficacy_Individual_outcomes")
+```
+
+
+
+```{r}
+
+ggdensity(p1$Efficacy_Collective_outcomes, 
+          main = "Density plot of Efficacy_Collective_outcomes",
+          xlab = "Efficacy_Collective_outcomes")
+```
+
+
+```{r}
+colnames(p1)
+```
+
+
+#New way to plot: https://www.youtube.com/watch?v=wSPN2qwgXWU&list=PL8F480DgtpW8gi4XtViwqBYbA4nIjAoUe&index=12
+
+```{r}
+require(fifer)
+data(p1)
+head(p1)
+```
+
+
+```{r}
+library(flexplot)
+flexplot(Risk_factors~1, data = p1)
+flexplot(Act_prevent_covid~1, data = p1)
+flexplot(Act_prevent_covid~State_poli, data = p1)
+flexplot(Act_prevent_covid~Efficacy_Individual_outcomes, data = p1, method = "loess", se = F,  alpha =.25)
+flexplot(Act_prevent_covid~Efficacy_Individual_outcomes, data = p1, method = "lm", se = F,  alpha =.25)
+```
+
+
+
+```{r}
+colnames(p1)
+```
+
+```{r}
+a <- lm(Act_prevent_covid ~ Efficacy_Positive_outcomes + Efficacy_Negativ_outcomes, data = p1)
+summary(a)
+plot(a)
+```
+
+```{r}
+library(performance)
+a1 <- check_model(a)
+a1
+```
+
+
+#z-test 
+
+##GLMM 
+
+```{r}
+library(lme4)
+library(nlme)
+library(arm)
+library(zinb)
+```
+
+
+```{r}
+
+```
+
+```{r}
+#a_0 <- lme(Act_prevent_covid ~ 
+#            1- State_poli + Risk_factors + 
+#            (1 + Risk_factors|State),
+         
+ #          data = p1)
+#summary(a_0)
+```
+
+

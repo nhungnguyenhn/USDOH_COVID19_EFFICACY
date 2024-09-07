@@ -1,0 +1,44 @@
+---
+title: "DOH_excel"
+author: "Nhung Nguyen"
+date: "4/30/2022"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r}
+DOH51states_a <- read_csv("data51states_A.csv")
+DOH51states_a 
+```
+
+
+```{r}
+dim(DOH51states_a )
+colnames(DOH51states_a )
+levels(DOH51states_a$state)
+map(DOH51states_a , ~sum(is.na(.)))
+```
+
+```{r}
+DOH51states_b <- 
+DOH51states_a %>% 
+  mutate(date = make_date(year, month, day)) %>% 
+relocate(date, .after = Real_ID) 
+DOH51states_b 
+```
+
+```{r}
+dim(DOH51states_b)
+colnames(DOH51states_b )
+map(DOH51states_b, ~sum(is.na(.)))
+```
+
+
+```{r}
+write_csv(DOH51states_b, "DOH51states_b.csv")
+```
+
